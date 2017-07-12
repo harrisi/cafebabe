@@ -1,108 +1,13 @@
 // function pointer with state implementation
-// (source: https://stackoverflow.com/a/1383453)
+// (built upon from https://stackoverflow.com/a/1383453)
 
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#define CONSTANT_Class 7
-#define CONSTANT_Fieldref 9
-#define CONSTANT_NameAndType 12
-#define CONSTANT_Methodref 10
+#include "cafebabe-fp.h"
 
-struct state;
-struct class_file;
-typedef void state_fn(struct state *);
-typedef void class_file_fn(struct class_file *);
-
-typedef uint8_t  u1;
-typedef uint16_t u2;
-typedef uint32_t u4;
-
-typedef struct CONSTANT_Methodref_info {
-    u1 tag;
-    u2 class_index;
-    u2 name_and_type_index;
-} CONSTANT_Methodref_info;
-
-struct state {
-    state_fn * next;
-    int i; // data
-};
-
-typedef struct cp_info {
-    u1 tag;
-    u1 *info;
-} cp_info;
-
-typedef struct attribute_info {
-    u2 attribute_name_index;
-    u4 attribute_length;
-    u1 *info; // [attribute_length]
-} attribute_info;
-
-typedef struct field_info {
-    u2              access_flags;
-    u2              name_index;
-    u2              descriptor_index;
-    u2              attributes_count;
-    attribute_info  *attributes; // [attributes_count]
-} field_info, method_info;
-
-struct class_file {
-    // "class file state-related fields"
-    class_file_fn *next;
-    FILE *file;
-    // classfile structure
-    // source:
-    // https://docs.oracle.com/javase/specs/jvms/se8/html/jvms-4.html#jvms-4.1
-    u4              magic;
-    u2              minor_version;
-    u2              major_version;
-    u2              constant_pool_count;
-    cp_info         *constant_pool;//[constant_pool_count-1]
-    u2              access_flags;
-    u2              this_class;
-    u2              super_class;
-    u2              interfaces_count;
-    u2              *interfaces;//[interfaces_count]
-    u2              fields_count;
-    field_info      *fields;//[fields_count]
-    u2              methods_count;
-    method_info     *methods;//[methods_count]
-    u2              attributes_count;
-    attribute_info  *attributes;//[attributes_count]
-};
-
-state_fn foo, bar;
-
-class_file_fn read_magic,
-              read_minor_version,
-              read_major_version,
-              read_constant_pool_count,
-              read_constant_pool,
-              read_access_flags,
-              read_this_class,
-              read_super_class,
-              read_interfaces_count,
-              read_interfaces,
-              read_fields_count,
-              read_fields,
-              read_methods_count,
-              read_methods,
-              read_attributes_count,
-              read_attributes;
-
-void foo(struct state * state) {
-    printf("%s %i\n", __func__, ++state->i);
-    state->next = bar;
-}
-
-void bar(struct state * state) {
-    printf("%s %i\n", __func__, ++state->i);
-    state->next = state->i < 10 ? foo : 0;
-}
-
+// XXX: This is not scalable or maintanable.
 void print_constant_pool(cp_info *cp) {
     switch (cp->tag) {
         case CONSTANT_Methodref: printf("method ref| tag: %u; class_index: %u; name_and_type_index: %u\n",
@@ -140,11 +45,14 @@ constant_pool_count: %u\n",
             cf->minor_version,
             cf->major_version,
             cf->constant_pool_count);
+
+    // print_constant_pool should take a class_file * and handle all of this.
     for (int i = 0; i < cf->constant_pool_count; i++) {
         printf("constant_pool[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
         print_constant_pool(&cf->constant_pool[i]);
     }
+
     printf(
 "access_flags: %u\n\
 this_class: %u\n\
@@ -154,30 +62,37 @@ interfaces_count: %u\n",
             cf->this_class,
             cf->super_class,
             cf->interfaces_count);
+
+    // print_interfaces should take a class_file * and handle this.
     for (int i = 0; i < cf->interfaces_count; i++) {
         printf("interfaces[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
         print_interfaces(&cf->interfaces[i]);
     }
+
+    // print_fields should take a class_file * and handle this.
     printf("fields_count: %u\n", cf->fields_count);
     for (int i = 0; i < cf->fields_count; i++) {
         printf("fields[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
         print_fields(&cf->fields[i]);
     }
+
+    // print_methods should take a class_file * and handle this.
     printf("methods_count: %u\n", cf->methods_count);
     for (int i = 0; i < cf->methods_count; i++) {
         printf("methods[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
         print_methods(&cf->methods[i]);
     }
+
+    // print_attributes should take a class_file * and handle this.
     printf("attributes_count: %u\n", cf->attributes_count);
     for (int i = 0; i < cf->attributes_count; i++) {
         printf("attributes[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
         print_attributes(&cf->attributes[i]);
     }
-    printf("\n");
 }
 
 void read_magic(struct class_file *cf) {
