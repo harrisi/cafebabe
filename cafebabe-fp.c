@@ -113,7 +113,7 @@ void print_attributes(attribute_info *ai) {
 
 void print_cf(struct class_file *cf) {
     printf(
-"magic: %u\n\
+"magic: %X\n\
 minor_version: %u\n\
 major_version: %u\n\
 constant_pool_count: %u\n",
@@ -160,22 +160,65 @@ interfaces_count: %u\n",
     }
     printf("\n");
 }
+
 void read_magic(struct class_file *cf) {
     printf("%s\n", __func__);
     int c, i = 0;
-    while((c = fgetc(cf->file)) != EOF && i < sizeof(cf->magic)) {
-        printf("%X\n", c);
+    while (i < sizeof(cf->magic) && (c = fgetc(cf->file)) != EOF) {
+        cf->magic |= c;
+        // can this branch be removed?
+        if (i + 1 < sizeof(cf->magic))
+            cf->magic <<= 8;
         i++;
     }
-    print_cf(cf);
+
+    cf->next = read_minor_version;
+}
+
+void read_minor_version(struct class_file *cf) {
+    printf("%s\n", __func__);
+    int c, i = 0;
+    while (i < sizeof(cf->minor_version) && (c = fgetc(cf->file)) != EOF) {
+        cf->minor_version |= c;
+        if (i + i < sizeof(cf->minor_version))
+            cf->minor_version <<= 8;
+        i++;
+    }
+
+    cf->next = read_major_version;
+}
+
+void read_major_version(struct class_file *cf) {
+    printf("%s\n", __func__);
+    int c, i = 0;
+    while (i < sizeof(cf->major_version) && (c = fgetc(cf->file)) != EOF) {
+        cf->major_version |= c;
+        if (i + i < sizeof(cf->major_version))
+            cf->major_version <<= 8;
+        i++;
+    }
+
+    cf->next = read_constant_pool_count;
+}
+
+void read_constant_pool_count(struct class_file *cf) {
+    printf("%s\n", __func__);
+    int c, i = 0;
+    while (i < sizeof(cf->constant_pool_count) && (c = fgetc(cf->file)) != EOF) {
+        cf->constant_pool_count |= c;
+        if (i + 1 < sizeof(cf->constant_pool_count))
+            cf->constant_pool_count <<= 8;
+        i++;
+    }
+
     cf->next = 0;
 }
 
 int main(int argc, char * argv[]) {
-    struct state state = { foo, 0 };
-    while (state.next) {
-        state.next(&state);
-    }
+//    struct state state = { foo, 0 };
+//    while (state.next) {
+//        state.next(&state);
+//    }
 
     struct class_file cf = { read_magic, 0 };
     if (argc < 2) {
@@ -189,11 +232,11 @@ int main(int argc, char * argv[]) {
         return 2;
     }
 
-    printf("sizeof magic: %lu\n", sizeof(cf.magic));
-
     while (cf.next) {
         cf.next(&cf);
     }
+
+    print_cf(&cf);
 
     return 0;
 }
