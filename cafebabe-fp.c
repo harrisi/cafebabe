@@ -5,6 +5,11 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+#define CONSTANT_Class 7
+#define CONSTANT_Fieldref 9
+#define CONSTANT_NameAndType 12
+#define CONSTANT_Methodref 10
+
 struct state;
 struct class_file;
 typedef void state_fn(struct state *);
@@ -13,6 +18,12 @@ typedef void class_file_fn(struct class_file *);
 typedef uint8_t  u1;
 typedef uint16_t u2;
 typedef uint32_t u4;
+
+typedef struct CONSTANT_Methodref_info {
+    u1 tag;
+    u2 class_index;
+    u2 name_and_type_index;
+} CONSTANT_Methodref_info;
 
 struct state {
     state_fn * next;
@@ -93,7 +104,14 @@ void bar(struct state * state) {
 }
 
 void print_constant_pool(cp_info *cp) {
-    printf("not yet implemented\n");
+    switch (cp->tag) {
+        case CONSTANT_Methodref: printf("method ref| tag: %u; class_index: %u; name_and_type_index: %u\n",
+                                         cp->tag,
+                                         ((CONSTANT_Methodref_info *)cp)->class_index,
+                                         ((CONSTANT_Methodref_info *)cp)->name_and_type_index);
+                                 break;
+        default: printf("not yet implemented\n");
+    }
 }
 
 void print_interfaces(u2 *i) {
@@ -212,18 +230,18 @@ void read_constant_pool_count(struct class_file *cf) {
         i++;
     }
 
-    cf->next = 0;
+    cf->next = read_constant_pool;
 }
-
-#define CONSTANT_Class 7
-#define CONSTANT_Fieldref 9
-#define CONSTANT_NameAndType 12
 
 void read_constant_class_info(struct class_file *cf, int index) {
 
 }
 
 void read_constant_fieldref_info(struct class_file *cf, int index) {
+
+}
+
+void read_constant_methodref_info(struct class_file *cf, int index) {
 
 }
 
@@ -234,7 +252,17 @@ typedef struct CONSTANT_NameAndType_info {
 } CONSTANT_NameAndType_info;
 
 u2 read_u2(FILE *f) {
-    return 0;
+    u2 tmp = 0;
+    u2 i = 0;
+    while (i < sizeof(u2)) {
+        // XXX: this can give EOF
+        tmp |= fgetc(f);
+        if (i + 1 < sizeof(u2)) {
+            tmp <<= 8;
+        }
+        i++;
+    }
+    return tmp;
 }
 
 // I'll have to look at the struct stacking polymorphism deal for this.
@@ -248,15 +276,29 @@ void read_nameandtype_info(struct class_file *cf, int index) {
     //cf->constant_pool[index].descriptor_index = read_u2(cf->file);
 }
 
+void unknown(struct class_file *cf, int index) {
+
+}
+
+void read_methodref_info(struct class_file *cf, int index) {
+    CONSTANT_Methodref_info *self = malloc(sizeof(CONSTANT_Methodref_info));
+    self->tag = CONSTANT_Methodref;
+    self->class_index = read_u2(cf->file);
+    self->class_index = read_u2(cf->file);
+}
+
 void (*read_tag(int c))(struct class_file *, int) {
     switch (c) {
         case CONSTANT_Class: return read_constant_class_info;
         case CONSTANT_Fieldref: return read_constant_fieldref_info;
         case CONSTANT_NameAndType: return read_nameandtype_info;
-        default: return 0;
+        case CONSTANT_Methodref: return read_methodref_info;
+        default: return unknown;
     }
 }
 
+// XXX: This is causing issues because I'm not advancing the file regularly.
+// I think the real issue is in read_tag and read_constant_* functions.
 void read_constant_pool(struct class_file *cf) {
     printf("%s\n", __func__);
     int c, i = 0;
@@ -268,9 +310,10 @@ void read_constant_pool(struct class_file *cf) {
         return;
     }
     while (i < cf->constant_pool_count && (c = fgetc(cf->file)) != EOF) {
-        read_tag(c)(cf, i);
+        read_tag(c)(cf, i++);
         // set cf->next..
     }
+    cf->next = 0;
 }
 
 int main(int argc, char * argv[]) {
