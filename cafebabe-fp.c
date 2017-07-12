@@ -3,6 +3,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 struct state;
 struct class_file;
@@ -212,6 +213,64 @@ void read_constant_pool_count(struct class_file *cf) {
     }
 
     cf->next = 0;
+}
+
+#define CONSTANT_Class 7
+#define CONSTANT_Fieldref 9
+#define CONSTANT_NameAndType 12
+
+void read_constant_class_info(struct class_file *cf, int index) {
+
+}
+
+void read_constant_fieldref_info(struct class_file *cf, int index) {
+
+}
+
+typedef struct CONSTANT_NameAndType_info {
+    u1 tag;
+    u2 name_index;
+    u2 descriptor_index;
+} CONSTANT_NameAndType_info;
+
+u2 read_u2(FILE *f) {
+    return 0;
+}
+
+// I'll have to look at the struct stacking polymorphism deal for this.
+
+void read_nameandtype_info(struct class_file *cf, int index) {
+    // set tag
+    // will have value 12 always (0x0a)
+    //cf->constant_pool[index] = malloc(sizeof(CONSTANT_NameAndType_info));
+    //cf->constant_pool[index].tag = 12;
+    //cf->constant_pool[index].name_index = read_u2(cf->file);
+    //cf->constant_pool[index].descriptor_index = read_u2(cf->file);
+}
+
+void (*read_tag(int c))(struct class_file *, int) {
+    switch (c) {
+        case CONSTANT_Class: return read_constant_class_info;
+        case CONSTANT_Fieldref: return read_constant_fieldref_info;
+        case CONSTANT_NameAndType: return read_nameandtype_info;
+        default: return 0;
+    }
+}
+
+void read_constant_pool(struct class_file *cf) {
+    printf("%s\n", __func__);
+    int c, i = 0;
+    // alloc memory, but I'm not sure how much?
+    cf->constant_pool = malloc(sizeof(cf->constant_pool) * cf->constant_pool_count);
+    if (!cf->constant_pool) {
+        printf("no luck with malloc'ing constant_pool.\n");
+        cf->next = 0;
+        return;
+    }
+    while (i < cf->constant_pool_count && (c = fgetc(cf->file)) != EOF) {
+        read_tag(c)(cf, i);
+        // set cf->next..
+    }
 }
 
 int main(int argc, char * argv[]) {
