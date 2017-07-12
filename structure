@@ -1,0 +1,25 @@
+check for filename existence
+    panic if not there
+    panic if empty
+open file for reading
+read following pieces in step:
+    magic
+    minor_version
+    major_version
+    constant_pool_count
+    constant_pool[constant_pool_count - 1]
+    access_flags
+    this_class
+    super_class
+    interfaces_count
+    interfaces[interfaces_count]
+    fields_count
+    fields[fields_count]
+    methods_count
+    methods[methods_count]
+    attributes_count
+    attributes[attributes_count]
+
+    this should probably be done by some sort of state machine
+
+bulk of work is in the state machine.
