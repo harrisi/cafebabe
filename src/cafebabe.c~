@@ -5,7 +5,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "cafebabe.h"
+#include "cafebabe-fp.h"
 
 u1 read_u1(FILE *f) {
     u1 tmp = 0;
