@@ -228,7 +228,7 @@ cf->constant_pool_count);
     }
 
     printf(
-"access_flags: %u\n\
+"access_flags: %X\n\
 this_class: %u\n\
 super_class: %u\n\
 interfaces_count: %u\n",
@@ -257,7 +257,10 @@ cf->interfaces_count);
     for (int i = 0; i < cf->methods_count; i++) {
         printf("methods[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
-        print_methods(cf->methods[i]);
+        if (cf->methods[i])
+            print_methods(cf->methods[i]);
+        else
+            printf("\n");
     }
 
     // print_attributes should take a class_file * and handle this.
@@ -265,7 +268,10 @@ cf->interfaces_count);
     for (int i = 0; i < cf->attributes_count; i++) {
         printf("attributes[%u]: ", i);
         // this should be able to be generalized for all of the arrays, I think.
-        print_attributes(cf->attributes[i]);
+        if (cf->attributes[i])
+            print_attributes(cf->attributes[i]);
+        else
+            printf("\n");
     }
 }
 
@@ -448,6 +454,96 @@ void read_constant_pool(struct class_file *cf) {
         read_tag(c)(cf, i++);
         // set cf->next..
     }
+    cf->next = read_access_flags;
+}
+
+void read_access_flags(class_file *cf) {
+    cf->access_flags = read_u2(cf->file);
+
+    cf->next = read_this_class;
+}
+
+void read_this_class(class_file *cf) {
+    cf->this_class = read_u2(cf->file);
+
+    cf->next = read_super_class;
+}
+
+void read_super_class(class_file *cf) {
+    cf->super_class = read_u2(cf->file);
+
+    cf->next = read_interfaces_count;
+}
+
+void read_interfaces_count(class_file *cf) {
+    cf->interfaces_count = read_u2(cf->file);
+
+    cf->next = read_interfaces;
+}
+
+void read_interfaces(class_file *cf) {
+    for (int i = 0; i < cf->interfaces_count; i++) {
+        // read interfaces here
+        printf("read_interfaces: not yet implemented!\n");
+    }
+
+    cf->next = read_fields_count;
+}
+
+void read_fields_count(class_file *cf) {
+    cf->fields_count = read_u2(cf->file);
+
+    cf->next = read_fields;
+}
+
+void read_fields(class_file *cf) {
+    for (int i = 0; i < cf->fields_count; i++) {
+        // read fields
+        printf("read_fields: not yet implemented!\n");
+    }
+
+    cf->next = read_methods_count;
+}
+
+void read_methods_count(class_file *cf) {
+    cf->methods_count = read_u2(cf->file);
+
+    cf->next = read_methods;
+}
+
+void read_methods(class_file *cf) {
+    cf->methods = malloc(sizeof(method_info) * cf->methods_count);
+    printf("in read_methods; at loc: %ld\n", ftell(cf->file));
+
+    for (int i = 0; i < cf->methods_count; i++) {
+        cf->methods[i] = NULL;
+    }
+    if (!cf->methods) {
+        printf("no luck allocating methods.\n");
+        cf->next = 0;
+        return;
+    }
+
+    cf->next = read_attributes_count;
+}
+
+void read_attributes_count(class_file *cf) {
+    cf->attributes_count = read_u2(cf->file);
+
+    cf->next = read_attributes;
+}
+
+void read_attributes(class_file *cf) {
+    cf->attributes = malloc(sizeof(attribute_info) * cf->attributes_count);
+    for (int i = 0; i < cf->attributes_count; i++) {
+        cf->attributes[i] = NULL;
+    }
+    if (!cf->attributes) {
+        printf("no luck allocating attributes.\n");
+        cf->next = 0;
+        return;
+    }
+
     cf->next = 0;
 }
 
