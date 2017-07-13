@@ -23,3 +23,4 @@ $(TARGET): $(OBJECTS)
 
 clean:
 	-rm bin/*
+	-rm src/*.o
