@@ -7,78 +7,32 @@
 
 #include "cafebabe.h"
 #include "printer.h"
+#include "util.h"
 
-u1 read_u1(FILE *f) {
-    // TODO: It may make sense to change this to an int to handle EOF.
-    u1 tmp = 0;
-
-    // XXX: this can give EOF
-    // which is an error because it's -1, but tmp can't hold that.
-    // let's just assume no EOF!
-    tmp = fgetc(f);
-
-    return tmp;
-}
-
-u2 read_u2(FILE *f) {
-    u2 tmp = 0;
-    u2 i = 0;
-
-    while (i < sizeof(u2)) {
-        // XXX: this can give EOF
-        // which is an error because it's -1, but tmp can't hold that.
-        // let's just assume no EOF!
-        tmp |= fgetc(f);
-        if (i + 1 < sizeof(u2)) {
-            tmp <<= 8;
-        }
-        i++;
-    }
-
-    return tmp;
-}
-
-u4 read_u4(FILE *f) {
-    u4 tmp = 0;
-    u4 i = 0;
-
-    while (i < sizeof(u4)) {
-        // XXX: this can give EOF
-        // which is an error because it's -1, but tmp can't hold that.
-        // let's just assume no EOF!
-        tmp |= fgetc(f);
-        if (i + 1 < sizeof(u4)) {
-            tmp <<= 8;
-        }
-        i++;
-    }
-
-    return tmp;
-}
+// Class file-specific functions (magic, version, etc.) might be moved
+// somewhere.
 
 void read_magic(struct class_file *cf) {
-//    printf("%s\n", __func__);
     cf->magic = read_u4(cf->file);
 
     cf->next = read_minor_version;
 }
 
 void read_minor_version(struct class_file *cf) {
-//    printf("%s\n", __func__);
     cf->minor_version = read_u2(cf->file);
 
     cf->next = read_major_version;
 }
 
 void read_major_version(struct class_file *cf) {
-//    printf("%s\n", __func__);
     cf->major_version = read_u2(cf->file);
 
     cf->next = read_constant_pool_count;
 }
 
+/* Constant pool stuff might make more sense in constantpool.c. */
+
 void read_constant_pool_count(struct class_file *cf) {
-//    printf("%s\n", __func__);
     cf->constant_pool_count = read_u2(cf->file);
 
     cf->next = read_constant_pool;
@@ -165,7 +119,7 @@ void read_utf8_info(struct class_file *cf, int index) {
     CONSTANT_Utf8_info *tmp = (CONSTANT_Utf8_info *)cf->constant_pool[index];
     tmp->tag = CONSTANT_Utf8;
     tmp->length = read_u2(cf->file);
-    tmp->bytes = malloc(tmp->length + 1);
+    tmp->bytes = malloc(tmp->length);
     fread(tmp->bytes, sizeof(tmp->bytes[0]), tmp->length, cf->file);
 }
 
@@ -217,15 +171,9 @@ void (*read_tag(int c))(struct class_file *, int) {
     }
 }
 
-// I think the real issue is in read_tag and read_constant_* functions.
 void read_constant_pool(struct class_file *cf) {
-//    printf("%s\n", __func__);
     int c, i = 0;
-    // alloc memory, but I'm not sure how much?
     cf->constant_pool = malloc(sizeof(cf->constant_pool) * cf->constant_pool_count);
-    for (int idx = 0; idx < cf->constant_pool_count; idx++) {
-        cf->constant_pool[idx] = NULL;
-    }
 
     if (!cf->constant_pool) {
         printf("no luck with malloc'ing constant_pool.\n");
@@ -235,10 +183,14 @@ void read_constant_pool(struct class_file *cf) {
 
     while (i < cf->constant_pool_count - 1 && (c = fgetc(cf->file)) != EOF) {
         read_tag(c)(cf, i++);
-        // set cf->next..
     }
+
     cf->next = read_access_flags;
 }
+
+/* END Constant pool stuff */
+
+/* more class file specific functions */
 
 void read_access_flags(class_file *cf) {
     cf->access_flags = read_u2(cf->file);
@@ -258,6 +210,10 @@ void read_super_class(class_file *cf) {
     cf->next = read_interfaces_count;
 }
 
+/* END class file specific functions */
+
+/* Interfaces may move to interfaces.c (does not currently exist). */
+
 void read_interfaces_count(class_file *cf) {
     cf->interfaces_count = read_u2(cf->file);
 
@@ -272,6 +228,10 @@ void read_interfaces(class_file *cf) {
 
     cf->next = read_fields_count;
 }
+
+/* END interfaces */
+
+/* Fields may move to fields.c (does not currently exist). */
 
 void read_fields_count(class_file *cf) {
     cf->fields_count = read_u2(cf->file);
@@ -288,27 +248,61 @@ void read_fields(class_file *cf) {
     cf->next = read_methods_count;
 }
 
+/* END fields */
+
+/* Methods will almost certainly need to be moved to a different file. */
+
 void read_methods_count(class_file *cf) {
     cf->methods_count = read_u2(cf->file);
 
     cf->next = read_methods;
 }
 
+// XXX: This is going to be a weird one. Since there is a whole separate
+// `attributes` field in the class file, but both field_info and method_info
+// also have their own attribute_info members. So it seems like a common method
+// that builds it up will be best. However, it will also need to handle the
+// reading. Alternatively, it would take a class_file * as normal, and then both
+// `methods` and `fields` would need to create an empty class_file, the
+// attributes would be read into that temporary object by `read_attributes`, and
+// then `read_methods` and `read_fields` would just extract the relevant data.
+// This seems less than ideal, but I'm somewhat constrained by the current FSM
+// implementation.
+// Bleh.
+// XXX
+void build_attributes(attribute_info *ai, FILE *f) {
+    ai->attribute_name_index = read_u2(f);
+    ai->attribute_length = read_u4(f);
+    ai->info = malloc(sizeof(ai[0]) * ai->attribute_length);
+    fread(ai->info, sizeof(ai->info[0]), ai->attribute_length, f);
+}
+
 void read_methods(class_file *cf) {
     cf->methods = malloc(sizeof(method_info) * cf->methods_count);
-    printf("in read_methods; at loc: %ld\n", ftell(cf->file));
+    //printf("in read_methods; at loc: %ld\n", ftell(cf->file));
 
-    for (int i = 0; i < cf->methods_count; i++) {
-        cf->methods[i] = NULL;
-    }
     if (!cf->methods) {
         printf("no luck allocating methods.\n");
         cf->next = 0;
         return;
     }
 
+    for (int i = 0; i < cf->methods_count; i++) {
+        cf->methods[i] = malloc(sizeof(method_info));
+        cf->methods[i]->access_flags = read_u2(cf->file);
+        cf->methods[i]->name_index = read_u2(cf->file);
+        cf->methods[i]->descriptor_index = read_u2(cf->file);
+        cf->methods[i]->attributes_count = read_u2(cf->file);
+        cf->methods[i]->attributes = malloc(sizeof(attribute_info) * cf->methods[i]->attributes_count);
+        build_attributes(cf->methods[i]->attributes, cf->file);
+    }
+
     cf->next = read_attributes_count;
 }
+
+/* END methods */
+
+/* Attributes will certainly need to be moved somewhere else. */
 
 void read_attributes_count(class_file *cf) {
     cf->attributes_count = read_u2(cf->file);
@@ -318,21 +312,31 @@ void read_attributes_count(class_file *cf) {
 
 void read_attributes(class_file *cf) {
     cf->attributes = malloc(sizeof(attribute_info) * cf->attributes_count);
-    for (int i = 0; i < cf->attributes_count; i++) {
-        cf->attributes[i] = NULL;
-    }
+
     if (!cf->attributes) {
         printf("no luck allocating attributes.\n");
         cf->next = 0;
         return;
     }
 
+    for (int i = 0; i < cf->attributes_count; i++) {
+        //cf->attributes[i]->attribute_name_index = read_u2(cf->file);
+        //cf->attributes[i]->attribute_length = read_u4(cf->file);
+        //cf->attributes[i]->info = malloc(sizeof(attribute_info) * cf->attributes[i]->attribute_length);
+        cf->attributes[i] = malloc(sizeof(attribute_info));
+        build_attributes(cf->attributes[i], cf->file);
+    }
+
     cf->next = 0;
 }
+
+/* END Attributes */
 
 void destroy(class_file *cf) {
     // free all malloc'd memory
 }
+
+// This isn't the best place for this probably?
 
 void print_cf(class_file *cf) {
     printf(

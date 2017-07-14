@@ -23,6 +23,6 @@ typedef struct field_info {
     u2 descriptor_index;
     u2 attributes_count;
     attribute_info *attributes; // [attributes_count]
-} field_info, method_info;
+} field_info, method_info; // XXX: Having these be the same type may be weird
 
 #endif //CAFEBABE_CAFEBABETYPES_H
