@@ -149,9 +149,20 @@ void print_fields(field_info *fi) {
 }
 
 void print_methods(method_info *mi) {
-    printf("not yet implemented\n");
+    printf("Method| access_flags: %u; name_index: %u; descriptor_index: %u; attributes_count: %u; attributes:\n",
+            mi->access_flags,
+            mi->name_index,
+            mi->descriptor_index,
+            mi->attributes_count);
+    printf("\t\t");
+    print_attributes(mi->attributes);
+//    printf("not yet implemented\n");
 }
 
 void print_attributes(attribute_info *ai) {
-    printf("not yet implemented\n");
+    printf("Attribute| attribute_name_index: %u; attribute_length: %u; info: %u\n",
+            ai->attribute_name_index,
+            ai->attribute_length,
+            ai->info);
+//    printf("not yet implemented\n");
 }
