@@ -156,13 +156,14 @@ void print_methods(method_info *mi) {
             mi->attributes_count);
     printf("\t\t");
     print_attributes(mi->attributes);
-//    printf("not yet implemented\n");
 }
 
 void print_attributes(attribute_info *ai) {
-    printf("Attribute| attribute_name_index: %u; attribute_length: %u; info: %u\n",
+    printf("Attribute| attribute_name_index: %u; attribute_length: %u; info: ",
             ai->attribute_name_index,
-            ai->attribute_length,
-            ai->info);
-//    printf("not yet implemented\n");
+            ai->attribute_length);
+    for (int i = 0; i < ai->attribute_length; i++) {
+        printf("%02x ", ai->info[i]);
+    }
+    printf("\n");
 }

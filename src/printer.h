@@ -1,7 +1,3 @@
-//
-// Created by Ian Harris on 17/7/13.
-//
-
 #ifndef CAFEBABE_PRINTER_H
 #define CAFEBABE_PRINTER_H
 

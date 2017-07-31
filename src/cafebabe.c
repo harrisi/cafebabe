@@ -4,10 +4,12 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "cafebabe.h"
 #include "printer.h"
 #include "util.h"
+#include "attributes.h"
 
 // Class file-specific functions (magic, version, etc.) might be moved
 // somewhere.
@@ -258,6 +260,46 @@ void read_methods_count(class_file *cf) {
     cf->next = read_methods;
 }
 
+// Follows non-terminals in CP to a terminal and returns that tag.
+cp_info * get_cp(class_file *cf, u2 index) {
+    u2 tmp = cf->constant_pool[index]->tag; // this seems wrong
+    if (tmp == CONSTANT_Utf8) {
+        return cf->constant_pool[index];
+    } else {
+        return get_cp(cf, tmp);
+    }
+}
+
+void build_attributes(class_file *, attribute_info *);
+
+void read_code_attribute(class_file *cf, attribute_info *ai) {
+    // attribute_name_index is already set.
+    // I think attribute_length could also be set.
+    // it is now.
+    Code_attribute *tmp = (Code_attribute *)ai;
+    tmp->max_stack = read_u2(cf->file);
+    tmp->max_locals = read_u2(cf->file);
+    tmp->code_length = read_u4(cf->file);
+    tmp->code = malloc(tmp->code_length);
+    // This seems to be off by one? As in it's re-reading the byte used in
+    // tmp->code_length.
+    tmp->code = fread(tmp->code, sizeof(tmp->code[0]), tmp->code_length, cf->file); 
+    tmp->exception_table_length = read_u2(cf->file);
+    for (int i = 0; i < tmp->exception_table_length; i++) {
+        printf("READING EXCEPTION TABLE NOT IMPLEMENTED!\n");
+        /* exception_table->start_pc */ read_u2(cf->file);
+        /* exception_table->end_pc */ read_u2(cf->file);
+        /* exception_table->handler_pc */ read_u2(cf->file);
+        /* exception_table->catch_type */ read_u2(cf->file);
+    }
+    tmp->attributes_count = read_u2(cf->file);
+    tmp->attributes = malloc(sizeof(attribute_info) * tmp->attributes_count);
+    for (int i = 0; i < tmp->attributes_count; i++) {
+        // Something is wrong.
+        build_attributes(cf, &(tmp->attributes[i]));
+    }
+}
+
 // XXX: This is going to be a weird one. Since there is a whole separate
 // `attributes` field in the class file, but both field_info and method_info
 // also have their own attribute_info members. So it seems like a common method
@@ -270,11 +312,33 @@ void read_methods_count(class_file *cf) {
 // implementation.
 // Bleh.
 // XXX
-void build_attributes(attribute_info *ai, FILE *f) {
-    ai->attribute_name_index = read_u2(f);
-    ai->attribute_length = read_u4(f);
+void build_attributes(class_file *cf, attribute_info *ai) {
+    ai->attribute_name_index = read_u2(cf->file);
+    ai->attribute_length = read_u4(cf->file);
+
+    // based on the above, we need to jump to a different method.
+    cp_info *tmp = get_cp(cf, ai->attribute_name_index - 1); // silly offset.
+    char *attr = NULL;
+    switch (tmp->tag) {
+        case CONSTANT_Utf8:
+            attr = malloc(((CONSTANT_Utf8_info *)tmp)->length + 1);
+            sprintf(attr, "%*s", ((CONSTANT_Utf8_info *)tmp)->length,
+                    ((CONSTANT_Utf8_info *)tmp)->bytes);
+            attr[((CONSTANT_Utf8_info *)tmp)->length] = '\0';
+            break;
+        default:
+            printf("not yet implemented!\n");
+    }
+    if (strcmp(attr, "Code") == 0) {
+        printf("got code attribute!\n");
+        read_code_attribute(cf, ai);
+    } else {
+        printf("didn't get code! got: %s\n", attr);
+    }
+    //ai->attribute_length = read_u4(cf->file);
     ai->info = malloc(sizeof(ai[0]) * ai->attribute_length);
-    fread(ai->info, sizeof(ai->info[0]), ai->attribute_length, f);
+    fread(ai->info, sizeof(ai->info[0]), ai->attribute_length, cf->file);
+    //printf("ai->info: %#x\n", ai->info);
 }
 
 void read_methods(class_file *cf) {
@@ -294,7 +358,7 @@ void read_methods(class_file *cf) {
         cf->methods[i]->descriptor_index = read_u2(cf->file);
         cf->methods[i]->attributes_count = read_u2(cf->file);
         cf->methods[i]->attributes = malloc(sizeof(attribute_info) * cf->methods[i]->attributes_count);
-        build_attributes(cf->methods[i]->attributes, cf->file);
+        build_attributes(cf, cf->methods[i]->attributes);
     }
 
     cf->next = read_attributes_count;
@@ -320,11 +384,9 @@ void read_attributes(class_file *cf) {
     }
 
     for (int i = 0; i < cf->attributes_count; i++) {
-        //cf->attributes[i]->attribute_name_index = read_u2(cf->file);
-        //cf->attributes[i]->attribute_length = read_u4(cf->file);
-        //cf->attributes[i]->info = malloc(sizeof(attribute_info) * cf->attributes[i]->attribute_length);
         cf->attributes[i] = malloc(sizeof(attribute_info));
-        build_attributes(cf->attributes[i], cf->file);
+        //build_attributes(cf->attributes[i], cf->file);
+        build_attributes(cf, cf->attributes[i]);
     }
 
     cf->next = 0;
